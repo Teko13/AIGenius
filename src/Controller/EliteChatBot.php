@@ -11,6 +11,7 @@ use Symfony\Component\Serializer\SerializerInterface;
 
 class EliteChatBot extends AbstractController
 {
+    private const DEFAULT_TREAD = "thread_tt3NGc1eoNenmFrQYqgTtbUW";
     private string $assistantId;
     public $client;
     public function __construct(private SerializerInterface $serializer, private ChatBot $bot, string $assistantId)
@@ -21,17 +22,23 @@ class EliteChatBot extends AbstractController
     public function test() {
         return new Response("ok");
     }
-    #[Route("/api/chatbot/{threadId}", name:"get_thread", methods: ["GET"])]
-    public function getThreadMessage(?string $threadId): JsonResponse
+
+    #[Route("/api/chatbot", name:"init_thread", methods: ["GET"])]
+    public function initThread(): JsonResponse
     {
-        if(!$threadId || !$this->bot->getThread($threadId))
+        $thread = $this->bot->createThread();
+        $data = [
+            "thread_id" => $thread["id"],
+            "messages" => []
+        ];
+        return $this->json($data, Response::HTTP_CREATED, []);
+    }
+    #[Route("/api/chatbot/{threadId}", name:"get_thread", methods: ["GET"])]
+    public function getThreadMessage(string $threadId): JsonResponse
+    {
+        if(!$this->bot->getThread($threadId))
         {
-            $thread = $this->bot->createThread();
-            $data = [
-                "thread_id" => $thread["id"],
-                "messages" => []
-            ];
-            return $this->json($data, Response::HTTP_CREATED, []);
+            return $this->json("", Response::HTTP_BAD_REQUEST);
         }
         $messages = $this->bot->getThreadMessages($threadId);
         $data = [
@@ -47,6 +54,17 @@ class EliteChatBot extends AbstractController
     {
         $data = json_decode($request->getContent(), true);
         $answer = $this->bot->askQuestion($this->assistantId, "$threadId", $data["question"]);
+        if(!$answer)
+        {
+            return $this->json("", Response::HTTP_BAD_REQUEST);
+        }
+        return $this->json($answer, Response::HTTP_OK);
+    }
+    #[Route("/api/chatbot", name:"ask_question_in_default_thread", methods: ["POST"])]
+    public function askQuestionDefaultThread(Request $request): JsonResponse
+    {
+        $data = json_decode($request->getContent(), true);
+        $answer = $this->bot->askQuestion($this->assistantId, self::DEFAULT_TREAD, $data["question"]);
         if(!$answer)
         {
             return $this->json("", Response::HTTP_BAD_REQUEST);
